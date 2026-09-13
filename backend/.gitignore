@@ -1,7 +1,7 @@
 # 环境变量文件：包含 API Key 等敏感信息，禁止提交
 .env
 .env.*
-!.env.example
+.env.example
 
 # Python 虚拟环境
 .venv/
