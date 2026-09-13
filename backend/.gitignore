@@ -1,0 +1,17 @@
+# 环境变量文件：包含 API Key 等敏感信息，禁止提交
+.env
+.env.*
+!.env.example
+
+# Python 虚拟环境
+.venv/
+
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+
+# 上传的附件（运行时数据，不入库到 git）
+uploads/
+
+# 记住的「当前工作目录」（本机路径，不入库到 git）
+.workspace.json

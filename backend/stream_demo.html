@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>流式对话 Demo</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --border: #262b38;
+    --text: #e6e8ee; --muted: #8b93a7; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; justify-content: center;
+    background: radial-gradient(1200px 600px at 50% -10%, #1c2333 0%, var(--bg) 60%);
+    color: var(--text);
+    font: 15px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  .app { width: min(820px, 100%); padding: 32px 20px; display: flex; flex-direction: column; }
+  h1 { font-size: 20px; margin: 0 0 20px; font-weight: 600; letter-spacing: .3px; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 10px; }
+
+  #log { flex: 1; display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+
+  .msg { display: flex; flex-direction: column; gap: 6px; }
+  .msg.user { align-items: flex-end; }
+  .role { font-size: 12px; color: var(--muted); }
+  .bubble {
+    max-width: 88%; padding: 10px 14px; border-radius: 12px;
+    white-space: pre-wrap; word-break: break-word;
+    background: var(--panel); border: 1px solid var(--border);
+  }
+  .msg.user .bubble { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .bubble:empty::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  details.think {
+    max-width: 88%; border: 1px dashed var(--border); border-radius: 10px;
+    padding: 8px 12px; background: #12151d;
+  }
+  details.think summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  details.think pre { margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); font-size: 13px; }
+
+  footer { display: flex; gap: 10px; align-items: flex-end; }
+  textarea {
+    flex: 1; resize: none; min-height: 52px; max-height: 160px; padding: 14px;
+    border-radius: 12px; border: 1px solid var(--border); background: var(--panel);
+    color: var(--text); font: inherit; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  button {
+    height: 52px; padding: 0 22px; border-radius: 12px; border: none; cursor: pointer;
+    background: var(--accent); color: #fff; font: inherit; font-weight: 600;
+  }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.stop { background: #e5484d; }
+  .err { color: #ff8b8b; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>流式对话 Demo <span>POST /send-message/stream · SSE</span></h1>
+  <div id="log"></div>
+  <footer>
+    <textarea id="input" placeholder="输入内容，Ctrl + Enter 发送"></textarea>
+    <button id="btn">发送</button>
+  </footer>
+</div>
+
+<script>
+const API = "http://127.0.0.1:5000/send-message/stream";
+const SYSTEM_PROMPT = "你是一个乐于助人的 AI 助手，回答简洁准确。";
+const history = [];        // 多轮上下文：[{ role, content }, ...]
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const btn = document.getElementById("btn");
+let controller = null;
+
+function add(role, cls = "") {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + cls;
+  const label = document.createElement("div");
+  label.className = "role";
+  label.textContent = role;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  wrap.append(label, bubble);
+  log.append(wrap);
+  log.scrollTop = log.scrollHeight;
+  return { wrap, bubble };
+}
+
+/** 逐行解析 SSE：按空行切分事件，处理跨 chunk 的半截数据 */
+async function readSSE(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop();               // 最后一段可能不完整，留到下一轮
+
+    for (const block of blocks) {
+      for (const line of block.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (raw === "[DONE]") return;
+        try { onEvent(JSON.parse(raw)); } catch (e) { console.warn("坏数据", raw, e); }
+      }
+    }
+  }
+}
+
+btn.addEventListener("click", send);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) send();
+});
+
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (controller) { controller.abort(); return; }   // 生成中 → 按钮变为「停止」
+
+  add("你", "user").bubble.textContent = text;
+  input.value = "";
+
+  const { wrap, bubble } = add("助手");
+  const think = document.createElement("details");
+  think.className = "think";
+  think.open = true;
+  think.innerHTML = "<summary>思考中…</summary><pre></pre>";
+  const thinkPre = think.querySelector("pre");
+  let thinkText = "";
+  let firstContent = true;
+
+  controller = new AbortController();
+  btn.textContent = "停止";
+  btn.classList.add("stop");
+
+  try {
+    const resp = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...history,                       // 之前的多轮对话
+          { role: "user", content: text },  // 本轮提问
+        ],
+      }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${await resp.text()}`);
+
+    await readSSE(resp, (evt) => {
+      if (evt.type === "reasoning") {
+        if (!think.isConnected) wrap.insertBefore(think, bubble);
+        thinkText += evt.content;
+        thinkPre.textContent = thinkText;
+      } else if (evt.type === "content") {
+        if (firstContent) {                       // 正文开始 → 收起思维链
+          firstContent = false;
+          think.open = false;
+          think.querySelector("summary").textContent = "已深度思考";
+        }
+        bubble.textContent += evt.content;        // 追加渲染，实现打字机效果
+      } else if (evt.type === "error") {
+        bubble.insertAdjacentHTML("afterend", `<div class="err">${evt.error}</div>`);
+      } else if (evt.type === "usage") {
+        console.log("用量：", evt.usage);
+      }
+      log.scrollTop = log.scrollHeight;
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      bubble.insertAdjacentHTML("afterend", '<div class="err">已停止生成</div>');
+    } else {
+      bubble.insertAdjacentHTML("afterend", `<div class="err">请求失败：${err.message}</div>`);
+    }
+  } finally {
+    // 记入历史，供下一轮带上（中途停止也会保留已生成的部分）
+    if (bubble.textContent) {
+      history.push(
+        { role: "user", content: text },
+        { role: "assistant", content: bubble.textContent },
+      );
+    }
+    controller = null;
+    btn.textContent = "发送";
+    btn.classList.remove("stop");
+    think.open = false;
+    input.focus();
+  }
+}
+</script>
+</body>
+</html>
