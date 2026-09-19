@@ -1,0 +1,681 @@
+/* 低代码平台：登录 / 编辑器 / 列表 / 预览共用样式（亮色 + 玻璃质感） */
+
+/* ---------- 通用小件 ---------- */
+
+.lc-title {
+    font-weight: 600;
+}
+
+.lc-muted {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.lc-dirty {
+    color: #d97706;
+    font-size: 12px;
+}
+
+.lc-loading,
+.lc-error {
+    padding: 24px;
+    color: var(--muted);
+}
+
+.lc-error {
+    color: #e5484d;
+    white-space: pre-wrap;
+}
+
+.lc-field {
+    margin-bottom: 10px;
+}
+
+.lc-field-label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.lc-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.lc-field-inline .lc-field-label {
+    margin-bottom: 0;
+}
+
+.lc-spacer {
+    flex: 1;
+}
+
+.lc-tip {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 6px;
+    word-break: break-all;
+}
+
+.lc-tip-error {
+    color: #e5484d;
+}
+
+.lc-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--text);
+    padding: 3px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+
+.lc-chip:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 2px 10px rgba(91, 91, 246, .18);
+}
+
+.lc-chip:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.lc-select {
+    width: 100%;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--text);
+    padding: 0 10px;
+}
+
+/* ---------- 编辑器骨架 ---------- */
+
+.lc-editor {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.lc-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr) 350px;
+    min-height: 0;
+}
+
+.lc-side,
+.lc-right {
+    overflow: auto;
+    background: var(--glass);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+}
+
+.lc-side {
+    border-right: 1px solid var(--border);
+}
+
+.lc-right {
+    border-left: 1px solid var(--border);
+}
+
+.lc-main {
+    overflow: auto;
+    padding: 20px;
+    background-color: var(--bg);
+    background-image: radial-gradient(#dfe3f5 1px, transparent 1px);
+    background-size: 22px 22px;
+}
+
+.lc-canvas {
+    min-height: 100%;
+}
+
+/* 工具栏：玻璃条 + 底部细线 */
+.lc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    flex-wrap: wrap;
+}
+
+/* ---------- 画布节点外壳 ---------- */
+
+.lc-node {
+    position: relative;
+    border-radius: 10px;
+    outline: 1px dashed transparent;
+    transition: outline-color .12s ease, box-shadow .12s ease;
+    min-width: 40px;
+}
+
+.lc-node:hover {
+    outline-color: #c8cde6;
+}
+
+.lc-node.lc-selected {
+    outline: 1.5px solid var(--accent);
+    box-shadow: 0 0 0 4px rgba(91, 91, 246, .14);
+}
+
+.lc-node.lc-over {
+    outline: 1.5px solid var(--accent-2);
+    background: rgba(168, 85, 247, .08);
+}
+
+.lc-node-badge,
+.lc-drop-hint {
+    position: absolute;
+    top: -19px;
+    z-index: 3;
+    font-size: 11px;
+    line-height: 17px;
+    padding: 0 8px;
+    border-radius: 6px;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.lc-node-badge {
+    left: 0;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 4px 12px rgba(91, 91, 246, .35);
+}
+
+.lc-drop-hint {
+    right: 0;
+    color: #7c3aed;
+    background: rgba(168, 85, 247, .14);
+    border: 1px solid rgba(168, 85, 247, .35);
+}
+
+.lc-invisible {
+    font-size: 12px;
+    color: var(--muted);
+    border: 1px dashed #c8cde6;
+    border-radius: 10px;
+    padding: 4px 8px;
+    background: #fafbff;
+}
+
+.lc-unknown {
+    font-size: 12px;
+    color: #e5484d;
+    border: 1px dashed #f3b6b8;
+    border-radius: 10px;
+    padding: 4px 8px;
+    background: #fff5f5;
+}
+
+/* ---------- 面板 ---------- */
+
+.lc-panel {
+    padding: 12px;
+}
+
+.lc-panel-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.lc-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.lc-panel-tip {
+    padding: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.lc-row-actions {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0 10px;
+}
+
+.lc-node-id {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.lc-ds-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(24, 28, 50, .04);
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+/* ---------- 物料面板 / 组件树 ---------- */
+
+.lc-material-group {
+    margin-bottom: 10px;
+}
+
+.lc-group-title {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.lc-materials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.lc-material {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: grab;
+    user-select: none;
+    background: #fff;
+    transition: all .15s ease;
+}
+
+.lc-material:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 4px 12px rgba(91, 91, 246, .16);
+    transform: translateY(-1px);
+}
+
+.lc-outline {
+    margin: 0 -12px;
+}
+
+.lc-outline-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+}
+
+.lc-outline-row:hover {
+    background: #f3f5ff;
+}
+
+.lc-outline-row.active {
+    background: linear-gradient(90deg, rgba(91, 91, 246, .16), rgba(168, 85, 247, .10));
+    border-left-color: var(--accent);
+}
+
+.lc-outline-id {
+    color: #98a2b3;
+    font-size: 11px;
+}
+
+/* ---------- AI 面板 / 版本抽屉 ---------- */
+
+.lc-ai-log {
+    margin: 8px 0 0;
+    padding: 10px;
+    max-height: 220px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+    background: #f7f8ff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.lc-login-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.lc-version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    margin-bottom: 10px;
+}
+
+.lc-version-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lc-version-comment {
+    font-size: 12px;
+    color: var(--text);
+    margin-top: 4px;
+    word-break: break-all;
+}
+
+/* ---------- 列表页 / 预览页 ---------- */
+
+.lc-list {
+    padding: 20px 24px 48px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.lc-list .lc-toolbar {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+}
+
+.lc-preview {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 24px 56px;
+}
+
+.lc-preview .lc-toolbar {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+}
+
+/* ---------- 登录页 ---------- */
+
+.lc-login {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1.05fr .95fr;
+}
+
+.lc-login-hero {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: 48px 56px;
+    color: #fff;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 45%, #06b6d4 100%);
+}
+
+.lc-login-hero-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 460px;
+}
+
+.lc-login-logo {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    letter-spacing: 1px;
+    background: rgba(255, 255, 255, .18);
+    border: 1px solid rgba(255, 255, 255, .35);
+    backdrop-filter: blur(6px);
+}
+
+.lc-login-hero h1 {
+    margin: 20px 0 8px;
+    font-size: 30px;
+    line-height: 1.3;
+    color: #fff;
+}
+
+.lc-login-hero p {
+    margin: 0 0 18px;
+    color: rgba(255, 255, 255, .85);
+}
+
+.lc-login-hero ul {
+    margin: 0;
+    padding-left: 18px;
+    color: rgba(255, 255, 255, .9);
+    line-height: 2;
+}
+
+.lc-login-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+    opacity: .5;
+    animation: lc-float 9s ease-in-out infinite;
+}
+
+.lc-orb-a {
+    width: 260px;
+    height: 260px;
+    right: -70px;
+    top: -60px;
+    background: radial-gradient(circle at 30% 30%, #a5b4fc, transparent 70%);
+}
+
+.lc-orb-b {
+    width: 200px;
+    height: 200px;
+    left: -60px;
+    bottom: -50px;
+    background: radial-gradient(circle at 40% 40%, #67e8f9, transparent 70%);
+    animation-delay: -3s;
+}
+
+.lc-orb-c {
+    width: 140px;
+    height: 140px;
+    right: 18%;
+    bottom: 12%;
+    background: radial-gradient(circle at 50% 50%, #f0abfc, transparent 70%);
+    animation-delay: -6s;
+}
+
+@keyframes lc-float {
+    0%, 100% { transform: translateY(0) }
+    50% { transform: translateY(-18px) }
+}
+
+.lc-login-panel {
+    display: grid;
+    place-items: center;
+    padding: 32px;
+}
+
+.lc-login-card {
+    width: min(400px, 100%);
+    padding: 34px 32px 28px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, .86);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 24px 60px rgba(24, 28, 50, .16);
+}
+
+.lc-login-card h2 {
+    margin: 0 0 4px;
+    font-size: 24px;
+}
+
+.lc-login-sub {
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.lc-login-gap {
+    margin-top: 12px;
+}
+
+.lc-login-submit {
+    margin-top: 22px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none;
+    box-shadow: 0 10px 24px rgba(91, 91, 246, .35);
+}
+
+.lc-login-submit:hover {
+    filter: brightness(1.06);
+}
+
+.lc-login-demo {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--border);
+}
+
+@media (max-width: 980px) {
+    .lc-login {
+        grid-template-columns: 1fr;
+    }
+
+    .lc-login-hero {
+        display: none;
+    }
+}
+
+/* ---------- 版本对比 ---------- */
+
+.lc-diff-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.lc-diff-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.lc-diff-summary {
+    display: flex;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.lc-diff-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100vh - 320px);
+    overflow: auto;
+    padding-right: 2px;
+}
+
+.lc-diff-row {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.lc-diff-add {
+    border-left-color: #16a34a;
+}
+
+.lc-diff-remove {
+    border-left-color: #e5484d;
+}
+
+.lc-diff-change {
+    border-left-color: #d97706;
+}
+
+.lc-diff-body {
+    min-width: 0;
+}
+
+.lc-diff-target {
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.lc-diff-scope {
+    color: var(--muted);
+    font-size: 11px;
+    margin-right: 6px;
+}
+
+.lc-diff-detail {
+    color: var(--muted);
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.lc-diff-actions {
+    margin-top: 12px;
+}
+
+/* ---------- 自定义组件示例（StatCard） ---------- */
+
+.lc-stat {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 18px;
+    background: #fff;
+    box-shadow: var(--shadow);
+    min-width: 170px;
+    overflow: hidden;
+}
+
+.lc-stat::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+}
+
+.lc-stat-title {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.lc-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.lc-stat-hint {
+    color: #98a2b3;
+    font-size: 11px;
+}

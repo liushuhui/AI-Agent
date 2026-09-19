@@ -1,0 +1,63 @@
+
+.vpage {
+    width: min(1100px, 100%);
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+}
+
+.vpage-head {
+    margin-bottom: 14px;
+}
+
+/* 滚动容器：高度由 TSX 里的 VIEW 常量设置，这里只管外观和滚动 */
+.vbox {
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    /* background: #12151d; */
+}
+
+/* 占位块：行都绝对定位在它内部 */
+.vbox-total {
+    position: relative;
+}
+
+.vbox-item {
+    position: absolute;
+    left: 0;
+    right: 0;
+}
+
+.vpage-foot {
+    display: block;
+    margin-top: 10px;
+    font-size: 12.5px;
+}
+
+
+/* ---------------- 行 ---------------- */
+
+.vrow {
+    padding: 12px 16px;
+    border: 1px solid #899b3a;
+    border-radius: 16px;
+    margin-bottom: 16px;
+}
+
+.vrow:hover {
+    background: rgba(79, 140, 255, .07);
+}
+
+.vrow-desc {
+    margin-top: 2px;
+    font-size: 13px;
+}
+
+.vrow-tags {
+    margin-top: 4px;
+}
+
+/* antd 的 Tag 自带右外边距，间距统一交给 Flex 的 gap */
+.vrow .ant-tag {
+    margin-inline-end: 0;
+}

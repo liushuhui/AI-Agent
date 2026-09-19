@@ -140,11 +140,13 @@ def init_db():
             CREATE TABLE IF NOT EXISTS conversations (
                 id            VARCHAR(36)  NOT NULL,
                 title         VARCHAR(120) NOT NULL DEFAULT '新对话',
+                owner_id      VARCHAR(64)  NOT NULL DEFAULT '' COMMENT '归属用户；空 = 历史遗留，仅管理员可见',
                 message_count INT UNSIGNED NOT NULL DEFAULT 0,
                 created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                KEY idx_conversations_updated_at (updated_at)
+                KEY idx_conversations_updated_at (updated_at),
+                KEY idx_conversations_owner (owner_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
         )
@@ -174,6 +176,8 @@ def init_db():
 
         # 建表语句只对新库生效，已经建过表的库在这里补新列（幂等）
         _ensure_column(cur, "conversation_messages", "thread_id", "VARCHAR(64) NULL")
+        # 会话归属：老库里的历史会话没有主，只对管理员可见
+        _ensure_column(cur, "conversations", "owner_id", "VARCHAR(64) NOT NULL DEFAULT ''")
 
 
 def _ensure_column(cur, table: str, column: str, ddl: str) -> None:
@@ -358,7 +362,7 @@ def list_expired_attachments(before: str) -> list:
 # 这样只有一处真相：前端刷新、换设备、重新打开老会话，看到的都是同一份记录，
 # 也不会出现「界面上有、模型看不到」或反过来的一致性问题。
 
-_CONVERSATION_COLUMNS = "id, title, message_count, created_at, updated_at"
+_CONVERSATION_COLUMNS = "id, title, owner_id, message_count, created_at, updated_at"
 # 带上 conversation_id：续跑审批时要校验「这条消息确实属于这个会话」
 _MESSAGE_COLUMNS = (
     "id, conversation_id, role, content, reasoning, attachments, thread_id, created_at"
@@ -410,12 +414,13 @@ def make_title(text: str) -> str:
     return flat[:TITLE_MAX_CHARS] + ("…" if len(flat) > TITLE_MAX_CHARS else "")
 
 
-def create_conversation(title: str = DEFAULT_TITLE) -> dict:
-    """新建会话，返回完整记录。"""
+def create_conversation(title: str = DEFAULT_TITLE, owner_id: str = "") -> dict:
+    """新建会话（带归属用户），返回完整记录。"""
     new_id = str(uuid.uuid4())
     with db_session() as cur:
         cur.execute(
-            "INSERT INTO conversations (id, title) VALUES (%s, %s)", (new_id, title)
+            "INSERT INTO conversations (id, title, owner_id) VALUES (%s, %s, %s)",
+            (new_id, title, owner_id),
         )
     return get_conversation(new_id)
 
@@ -431,14 +436,17 @@ def get_conversation(conversation_id: str) -> dict | None:
     return _conversation_row(row)
 
 
-def list_conversations(limit: int = 200) -> list:
-    """会话列表，最近有更新的排最前（列表页只查这一张表，不用 JOIN）。"""
+def list_conversations(limit: int = 200, owner_id: str | None = None) -> list:
+    """会话列表，最近有更新的排最前；owner_id 非空时只看该用户的会话。"""
+    sql = f"SELECT {_CONVERSATION_COLUMNS} FROM conversations"
+    params: list = []
+    if owner_id:
+        sql += " WHERE owner_id = %s"
+        params.append(owner_id)
+    sql += " ORDER BY updated_at DESC, id DESC LIMIT %s"
+    params.append(int(limit))
     with db_session() as cur:
-        cur.execute(
-            f"SELECT {_CONVERSATION_COLUMNS} FROM conversations "
-            "ORDER BY updated_at DESC, id DESC LIMIT %s",
-            (int(limit),),
-        )
+        cur.execute(sql, tuple(params))
         rows = cur.fetchall()
     return [_conversation_row(r) for r in rows]
 

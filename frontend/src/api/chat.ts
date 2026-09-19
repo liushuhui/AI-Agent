@@ -1,4 +1,5 @@
 import type { StreamEvent } from "../types";
+import { authHeaders, clearSession } from "./auth";
 
 /**
  * SSE 基础设施：读流 + 发流。
@@ -68,10 +69,15 @@ export const postStream = async (
 ): Promise<void> => {
   const resp = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
     signal,
   });
+  if (resp.status === 401) {
+    clearSession();
+    window.location.replace("/login");
+    throw new Error("登录已过期，请重新登录");
+  }
   // 后端所有非流式响应（400/413/429/500…）都是同一个 JSON 形状，
   // 带上 request_id 方便用户报障时直接定位服务端日志。
   if (!resp.ok) throw await toError(resp);

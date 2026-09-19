@@ -1,0 +1,109 @@
+/* 应用外壳：左侧菜单栏 + 右侧内容区（亮色 + 玻璃质感） */
+
+.app-shell {
+    min-height: 100vh;
+}
+
+/*
+ * 侧栏：玻璃拟态 + 吸顶一屏高。
+ * 选择器带 .app-shell 前缀是为了提高优先级：antd 的样式运行时注入，
+ * 同优先级时会按注入顺序压过这里的规则（position/background 就是例子）。
+ */
+.app-shell .app-sider {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow: auto;
+    background: rgba(255, 255, 255, .68);
+    backdrop-filter: blur(18px) saturate(1.5);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    border-right: 1px solid var(--border);
+}
+
+/* 侧栏顶部的品牌块：一行布局（左边文字，右边折叠按钮） */
+.app-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 20px 8px 12px 16px;
+    line-height: 1.4;
+}
+
+/* 品牌文字两行：名称 + 副标题；min-width:0 允许被压缩 */
+.app-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* 折叠按钮：低调灰色，可点击区域小一点 */
+.app-collapse-btn {
+    flex: none;
+    color: var(--muted);
+}
+
+.app-brand-name {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    background: linear-gradient(135deg, #5b5bf6, #a855f7);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.app-brand-sub {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* 菜单去掉自带的右边框和底色（分隔线统一由侧边栏画） */
+.app-shell .app-menu {
+    border-inline-end: none;
+    background: transparent;
+}
+
+/* 内容区：页面自带宽度上限、用 auto 外边距居中，这里不用再做布局 */
+.app-content {
+    min-width: 0;
+}
+
+/* 侧栏底部：当前登录用户 + 退出（靠 margin-top:auto 顶到底部） */
+.app-shell .app-sider {
+    display: flex;
+    flex-direction: column;
+}
+
+.app-user {
+    margin-top: auto;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.app-user-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 折叠态：品牌区只剩一个居中的「展开」按钮，用户区隐藏名字并居中 */
+.app-shell .app-sider.app-sider-collapsed .app-brand {
+    justify-content: center;
+    padding: 20px 0 12px;
+}
+
+.app-shell .app-sider.app-sider-collapsed .app-user {
+    justify-content: center;
+    padding: 12px 0 16px;
+}
+
+.app-shell .app-sider.app-sider-collapsed .app-user-name {
+    display: none;
+}

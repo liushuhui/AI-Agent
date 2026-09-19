@@ -1,4 +1,5 @@
 import type { Attachment, AttachmentKind } from "../types";
+import { getToken } from "./auth";
 
 /** 上传接口：经 Vite 代理 /api → 后端 /attachments */
 export const UPLOAD_API = "/api/attachments";
@@ -93,6 +94,8 @@ export const uploadAttachment = (
   new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", UPLOAD_API);
+    const token = getToken();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && onProgress) {

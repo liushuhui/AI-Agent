@@ -21,9 +21,17 @@
 from flask import Blueprint, jsonify, request
 
 import db
+from lowcode_auth import can_access, require_user
+from lowcode_store import LowcodeError
 from message import release_conversation_threads
 
 conversation_bp = Blueprint("conversation", __name__)
+
+
+@conversation_bp.errorhandler(LowcodeError)
+def _on_auth_error(exc: LowcodeError):
+    """未登录/令牌过期统一 401 JSON（与低代码平台共用同一套登录）。"""
+    return jsonify({"error": str(exc)}), exc.code
 
 # 标题长度上限，与 conversations.title 的列宽（120）保持余量
 TITLE_MAX = 60
@@ -33,18 +41,20 @@ def _fail(message: str, status: int = 400):
     return jsonify({"error": message}), status
 
 
-def _conversation_or_404(conversation_id: str):
-    """取会话；不存在时返回 (None, 404 响应) 由调用方直接 return。"""
+def _owned_or_404(conversation_id: str):
+    """取当前用户有权访问的会话；不存在与无权限都按 404 回（不泄露存在性）。"""
     conversation = db.get_conversation(conversation_id)
-    if conversation is None:
+    if conversation is None or not can_access(require_user(), conversation.get("owner_id", "")):
         return None, _fail(f"会话 {conversation_id} 不存在", 404)
     return conversation, None
 
 
 @conversation_bp.route("/conversations", methods=["GET"])
 def list_conversations():
-    """会话列表，用于左侧列表展示。"""
-    return jsonify({"conversations": db.list_conversations()})
+    """会话列表（只返回当前用户自己的；管理员看全部）。"""
+    user = require_user()
+    owner = None if user["role"] == "admin" else user["id"]
+    return jsonify({"conversations": db.list_conversations(owner_id=owner)})
 
 
 @conversation_bp.route("/conversations", methods=["POST"])
@@ -56,13 +66,14 @@ def create_conversation():
     """
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()[:TITLE_MAX] or db.DEFAULT_TITLE
-    return jsonify(db.create_conversation(title)), 201
+    user = require_user()
+    return jsonify(db.create_conversation(title, owner_id=user["id"])), 201
 
 
 @conversation_bp.route("/conversations/<string:conversation_id>", methods=["GET"])
 def get_conversation(conversation_id):
     """会话详情 + 全部消息（按时间正序），用于点开历史对话时回填界面。"""
-    conversation, error = _conversation_or_404(conversation_id)
+    conversation, error = _owned_or_404(conversation_id)
     if error:
         return error
     return jsonify(
@@ -73,6 +84,9 @@ def get_conversation(conversation_id):
 @conversation_bp.route("/conversations/<string:conversation_id>", methods=["PUT"])
 def rename_conversation(conversation_id):
     """重命名。请求体 {"title": "..."}。"""
+    _, error = _owned_or_404(conversation_id)
+    if error:
+        return error
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
     if not title:
@@ -90,6 +104,10 @@ def delete_conversation(conversation_id):
     注意：附件文件不在这里删（附件表与会话表没有从属关系），
     否则「同一个附件被多个会话引用」时会误删。
     """
+    # 先确认会话归当前用户，再清检查点；不存在/无权限一律 404
+    _, error = _owned_or_404(conversation_id)
+    if error:
+        return error
     # 先清检查点再删记录：线程 id 记在消息表里，删了消息就找不到了。
     # 挂起中的审批与待办清单只存在检查点里，对话都不要了，一并清掉。
     release_conversation_threads(conversation_id)

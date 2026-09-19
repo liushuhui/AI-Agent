@@ -15,6 +15,8 @@ import db
 from attachment import IMAGE_KEEP_TURNS, build_content_blocks
 from AIagent.agents import SmartAssistant
 from logging_setup import current_request_id, get_logger
+from lowcode_auth import can_access, require_user
+from lowcode_store import LowcodeError
 
 load_dotenv(override=True)
 
@@ -33,6 +35,12 @@ DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE")
 
 
 message_bp = Blueprint("message", __name__)
+
+
+@message_bp.errorhandler(LowcodeError)
+def _on_message_auth_error(exc: LowcodeError):
+    """鉴权失败（未登录/令牌过期）统一 401 JSON，与低代码平台共用登录。"""
+    return jsonify({"error": str(exc)}), exc.code
 
 agent = SmartAssistant()
 
@@ -520,8 +528,9 @@ def send_conversation_message(conversation_id):
       4. 生成过程中断或结束，已生成的内容都追加回库（见 _run_agent_stream），
          刷新页面、换设备都能接着看。
     """
+    user = require_user()
     conversation = db.get_conversation(conversation_id)
-    if conversation is None:
+    if conversation is None or not can_access(user, conversation.get("owner_id", "")):
         return jsonify({"error": f"会话 {conversation_id} 不存在"}), 404
 
     data = request.get_json(silent=True) or {}
@@ -575,6 +584,10 @@ def resume_conversation_message(conversation_id):
     message_id 取 interrupt 事件里带回的值：续写的内容接到同一条助手回复上
     （所以刷新页面后，看到的是拼接完整的整条回复，而不是两个半截）。
     """
+    user = require_user()
+    conversation = db.get_conversation(conversation_id)
+    if conversation is None or not can_access(user, conversation.get("owner_id", "")):
+        return jsonify({"error": f"会话 {conversation_id} 不存在"}), 404
     data = request.get_json(silent=True) or {}
     thread_id, error = _read_thread_id(data)
     if error:

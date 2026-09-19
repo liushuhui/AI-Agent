@@ -1,10 +1,13 @@
 :root {
-    --bg: #0f1117;
-    --panel: #171a23;
-    --border: #262b38;
-    --text: #e6e8ee;
-    --muted: #8b93a7;
-    --accent: #4f8cff;
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --border: #e5e8f2;
+    --text: #1e2430;
+    --muted: #667085;
+    --accent: #5b5bf6;
+    --accent-2: #a855f7;
+    --glass: rgba(255, 255, 255, .68);
+    --shadow: 0 12px 32px rgba(24, 28, 50, .10);
 }
 
 * {
@@ -19,16 +22,19 @@
 body {
     margin: 0;
     min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    background: radial-gradient(1200px 600px at 50% -10%, #1c2333 0%, #0f1117 60%);
+    background:
+        radial-gradient(1000px 520px at 8% -12%, #e0e7ff 0%, rgba(224, 231, 255, 0) 60%),
+        radial-gradient(900px 480px at 102% -6%, #f3e8ff 0%, rgba(243, 232, 255, 0) 55%),
+        radial-gradient(820px 420px at 50% 112%, #e0f2fe 0%, rgba(224, 242, 254, 0) 60%),
+        var(--bg);
+    background-attachment: fixed;
     color: var(--text);
     font: 15px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
 /* 等待首个 token 时的闪烁光标 */
 .caret {
-    color: #4f8cff;
+    color: var(--accent);
     animation: blink 1s steps(2) infinite;
 }
 
@@ -39,6 +45,11 @@ body {
 }
 
 /* ---------------- 附件 ---------------- */
+
+/* 对话页：外层内容区是普通块级流，靠 auto 外边距把自己居中 */
+.chat {
+    margin: 0 auto;
+}
 
 /* 拖拽文件到窗口任意位置时的提示 */
 .chat.drop-active {

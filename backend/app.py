@@ -25,9 +25,14 @@ from flask import Flask, jsonify, request
 import config
 import db
 import http_middleware
+import lowcode_auth
+import lowcode_store
 import tool_store
 from attachment import MAX_UPLOAD_MB, attachment_bp, supported_summary
 from conversation_api import conversation_bp
+from lowcode_agent import lowcode_agent_bp
+from lowcode_api import lowcode_bp
+from lowcode_auth import auth_bp
 from message import message_bp
 from logging_setup import get_logger, setup_logging
 from workspace_api import workspace_bp
@@ -46,10 +51,15 @@ app.url_map.strict_slashes = False
 
 db.init_db()  # 启动时确保库表已创建
 tool_store.init_tool_tables()  # 工具用的数据表 + 首次种子数据（幂等，同样启动时做一次）
+lowcode_store.init_lowcode_tables()  # 低代码平台表 + 种子用户/示例页面（幂等）
+lowcode_auth.init_auth_tables()  # 令牌表 + 给种子用户回填演示密码（幂等）
 app.register_blueprint(message_bp)
 app.register_blueprint(attachment_bp)
 app.register_blueprint(workspace_bp)
 app.register_blueprint(conversation_bp)
+app.register_blueprint(lowcode_bp)
+app.register_blueprint(lowcode_agent_bp)
+app.register_blueprint(auth_bp)
 
 
 def _readiness_probe() -> dict:
