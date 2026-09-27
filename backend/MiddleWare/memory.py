@@ -1,3 +1,13 @@
+"""基于 InMemoryStore 的长期记忆参考示例。
+
+MiddleWare 包下的教学脚本：演示用 LangGraph 的 store 按 user_id 跨会话存取
+键值（这里存「用户叫什么」），再通过 ToolRuntime 把 store 注入工具。
+注意这是「长期用户画像」思路，与主业务 assistant.py 的多轮对话历史
+（落在会话库 db.py）是两套东西；本脚本未接入主链路。
+
+前置：backend/.env 配好 DEEPSEEK_API_KEY，并能联网。
+"""
+
 import os
 import sys
 
@@ -29,9 +39,13 @@ if not DEEPSEEK_API_KEY or not DEEPSEEK_API_BASE:
     raise RuntimeError("DEEPSEEK_API_KEY / DEEPSEEK_API_BASE 未配置，请检查 backend/.env")
 
 
+# 长期记忆库（进程内）：跨会话按 user_id 存取键值。
+# 主业务 assistant.py 的多轮历史落在会话库 db.py，与这里是两套机制。
 store = InMemoryStore()
 
 
+# 自定义 state：默认 AgentState 只有 messages，这里额外加一个 user_id 字段，
+# 工具才能知道当前在读写哪份记忆（store.put/get 的命名空间用它）。
 class CustomState(AgentState):
     user_id: NotRequired[str]
 

@@ -1,9 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-db.py —— MySQL 连接层 + 增删改查(CRUD)逻辑
+db.py —— MySQL 连接层 + 增删改查(CRUD)逻辑（持久层）。
+
+在整体架构中的位置
+==================
+本文件是整个后端唯一的数据库访问层，向上被多个模块调用：
+  · message.py          会话发消息 / 落库 / 流式追加正文（add_message、append_message）
+  · conversation_api.py 会话列表 / 改名 / 删除（list_conversations、delete_conversation）
+  · attachment/routes.py 附件上传落库 / 查询 / 清理（create_attachment、get_attachments）
+  · lowcode_auth.py     登录令牌与用户表（直接复用本模块的 db_session / MYSQL_CONFIG）
+  · app.py              启动时调一次 init_db() 建库建表
 
 依赖：pip install pymysql
 如需覆盖默认值，可设置环境变量 DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME。
+
+四张表及其关系（统一 utf8mb4，支持 emoji）
+==========================================
+  users                  系统用户（低代码平台账号体系，PK=UUID 字符串）
+  attachments            上传附件的元数据 + 解析出的正文（PK=UUID 字符串）
+  conversations          一次「打开新对话」= 一行（PK=UUID 字符串，带 owner_id 归属）
+  conversation_messages  会话里的每条消息（PK=自增 BIGINT；逻辑外键挂
+                         conversation_id；attachments 列存附件「引用快照」JSON，
+                         文件本体在 attachments 表，不冗余存储）
+
+设计要点（贯穿全文件）
+======================
+1. 连接每次操作新建、用完即关（无连接池）：demo 规模够用、逻辑简单；
+   高并发时应换连接池（DBUtils / SQLAlchemy pool）。
+2. 所有写操作都走 db_session() 事务上下文：正常提交、异常回滚、用后关连接。
+3. 建表幂等：CREATE TABLE IF NOT EXISTS + _ensure_column 平滑加列，
+   老库启动时自动补列，不用手动改表、绝不删表重建。
+4. 会话的「显示历史」和「发给模型的上下文」共用 conversation_messages 一份数据，
+   只有一处真相，避免界面与模型看到的不一致。
 """
 
 import json
@@ -196,6 +224,11 @@ def _ensure_column(cur, table: str, column: str, ddl: str) -> None:
 
 
 # ---------------- 增删改查（CRUD） ----------------
+#
+# 下面按「用户 / 附件 / 会话 / 消息」四块组织。每块都有一个 `_xxx_row` 行转换
+# 函数：DictCursor 已经返回 dict，统一把 datetime 字段转成字符串方便 JSON 输出；
+# 越靠后的表要转的字段越多（消息还要把 attachments 列的 JSON 解回列表），
+# 所以没有复用同一个函数，而是各写各的，避免参数里塞一堆「要不要转这个字段」。
 
 def _row_to_dict(row) -> dict | None:
     """DictCursor 已返回 dict，这里把 datetime 统一转成字符串便于 JSON 输出。"""

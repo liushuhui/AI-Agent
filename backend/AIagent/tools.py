@@ -64,6 +64,10 @@ def calculator(expression: str) -> str:
             "pi": math.pi,
             "e": math.e,
         }
+        # 安全沙箱：eval 的第二参 {"__builtins__": None} 抹掉全部内置名（不能 import、
+        # 不能 open 文件、拿不到任意系统能力），第三参只放行上面这份白名单函数。
+        # 这样模型即便生成恶意表达式，也被限制在「纯数学计算」里出不来。
+        # 这是 demo 级方案，不要拿去执行用户任意上传的代码。
         # 使用 eval 计算表达式，注意安全性
         result = eval(expression, {"__builtins__": None}, safe_functions)
         return f"{expression} = {result}"

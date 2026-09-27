@@ -1,3 +1,14 @@
+"""HumanInTheLoopMiddleware（人工审批 / HITL）参考示例。
+
+MiddleWare 包下的教学脚本：单独演示「模型要调敏感工具时先中断、把待办动作
+交给人决定（批准/拒绝/改参数），再用 Command(resume=...) 续跑」这一机制。
+它对应主业务 AIagent/assistant.py 中间件栈第 8 层的人工审批——
+那里把审批接进 Web 端让用户点按钮，这里把决策写死在脚本里跑通流程。
+
+前置：backend/.env 配好 DEEPSEEK_API_KEY；工具 get_weather/calculator/get_time_info
+来自 AIagent.agents（内部读 tool_store 数据表），无需联网。
+"""
+
 import os
 import sys
 
@@ -18,12 +29,15 @@ from langgraph.types import Command
 
 from rich import print as rprint
 
+# checkpointer 记下「图运行状态」，被中断的工具调用挂在这里，靠 thread_id 才能续跑。
 agent = create_agent(
     model=model,
     tools=[get_weather, calculator, get_time_info],
     checkpointer=InMemorySaver(),
     middleware=[
         HumanInTheLoopMiddleware(
+            # interrupt_on 三种写法：True=每次都中断等人确认；False=直接放行不中断；
+            # dict=自定义允许的决策项与提示语（这里 get_time_info 走自定义决策）。
             interrupt_on={
                 "get_weather": True,
                 "calculator": False,
@@ -65,6 +79,8 @@ calculator_decision = {
 }
 time_info_decision = {"type": "approve"}
 
+# 第一轮 invoke 会在第一个需要审批的工具处中断，返回 __interrupt__；
+# 这里按动作名拼好每一个 decision，再用 Command(resume=...) 把结果喂回去续跑。
 decisions = {"decisions": []}
 
 interrupts = response.get("__interrupt__", [])

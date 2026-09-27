@@ -37,6 +37,12 @@ IMAGE_MAX_EDGE = int(os.getenv("IMAGE_MAX_EDGE", "1600"))
 
 
 def _env_flag(name: str, default: bool = True) -> bool:
+    """把布尔型环境变量解析成 bool。
+
+    约定：未设置 → 用 default；显式设值时只要不是
+    0/false/no/off（大小写不敏感、可带空白）就视为 True。
+    这样运维侧写 TRUE/1/yes 都能被正确识别，避免只能写字符串 "true"。
+    """
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -48,8 +54,11 @@ IMAGE_KEEP_TURNS = int(os.getenv("IMAGE_KEEP_TURNS", "2"))
 
 MAX_UPLOAD_BYTES = int(MAX_UPLOAD_MB * 1024 * 1024)
 MAX_IMAGE_BYTES = int(MAX_IMAGE_MB * 1024 * 1024)
+# 上面两个是把 MB 配置换算成「字节」常量，供 store.py 做大小比对时直接用，
+# 避免每处上传都重复做乘法与浮点转整。
 
 # ---------------- 类型白名单 ----------------
+# 扩展名一律小写、不含点号；按业务类型分组，便于后面派生 KIND_BY_EXT / 白名单 / 标签。
 IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "bmp", "gif"}
 WORD_EXTS = {"docx"}
 SHEET_EXTS = {"xlsx", "csv"}
@@ -59,6 +68,9 @@ TEXT_EXTS = {
     "py", "js", "jsx", "ts", "tsx", "css", "sql", "ini", "conf", "toml", "sh",
 }
 
+# 扩展名 → 大类（kind）。kind 是贯穿 store/parsers/blocks 的核心分类键：
+# store 用它决定大小上限与是否压缩图片，parsers 用它分发解析器，blocks 用它决定
+# 走 image_url 多模态块还是 text 正文块。
 KIND_BY_EXT = {}
 KIND_BY_EXT.update({e: "image" for e in IMAGE_EXTS})
 KIND_BY_EXT.update({e: "pdf" for e in PDF_EXTS})
@@ -66,6 +78,7 @@ KIND_BY_EXT.update({e: "word" for e in WORD_EXTS})
 KIND_BY_EXT.update({e: "sheet" for e in SHEET_EXTS})
 KIND_BY_EXT.update({e: "text" for e in TEXT_EXTS})
 
+# 每个 kind 面向用户的中文标签；"other" 不在任何白名单里，仅作兜底展示名。
 KIND_LABELS = {
     "image": "图片",
     "pdf": "PDF",
@@ -75,8 +88,12 @@ KIND_LABELS = {
     "other": "文件",
 }
 
+# 真正生效的「扩展名白名单」：只要被收进 KIND_BY_EXT 的扩展名都允许上传，
+# 反过来未列出的类型一律在 store.save_upload 阶段被 AttachmentError 挡掉。
 ALLOWED_EXTS = set(KIND_BY_EXT)
 
+# 扩展名 → 标准 MIME。仅用于上传方 MIME 缺失/不可信（octet-stream）时兜底推断，
+# 以及 /raw 下载时给浏览器正确的 Content-Type（决定 <img> 能否直接渲染）。
 MIME_BY_EXT = {
     "png": "image/png",
     "jpg": "image/jpeg",
@@ -111,7 +128,8 @@ def guess_mime(ext: str, provided: str | None) -> str:
     return MIME_BY_EXT.get(ext, "application/octet-stream")
 
 
-# 前端 <input accept> 用的字符串，与 ALLOWED_EXTS 保持一致
+# 前端 <input accept> 用的字符串，与 ALLOWED_EXTS 保持一致；
+# 排序是为了让产物字符串稳定（测试/快照可复现），并对用户友好可读。
 ACCEPT_ATTR = ",".join(sorted(f".{e}" for e in ALLOWED_EXTS))
 
 

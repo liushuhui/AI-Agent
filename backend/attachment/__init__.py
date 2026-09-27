@@ -14,6 +14,9 @@
 本文件只做再导出，保持 `from attachment import xxx` 这种老写法继续可用。
 """
 
+# 再导出：把分散在子模块里的公开 API 统一挂到 attachment 包顶层，
+# 让外部可以写 `from attachment import build_content_blocks, save_upload, ...`，
+# 而不必关心它们到底在 blocks.py 还是 store.py 里。
 from attachment.blocks import build_content_blocks
 from attachment.config import (
     ACCEPT_ATTR,
@@ -38,6 +41,8 @@ from attachment.parsers import extract_text, shrink_image_if_needed
 from attachment.routes import attachment_bp
 from attachment.store import public_view, save_upload, storage_path
 
+# 显式声明包的公开 API：与上面的 import 一一对应。
+# 作用：`from attachment import *` 时只导出这些名字，也让静态检查/IDE 能识别公共面。
 __all__ = [
     "ACCEPT_ATTR",
     "ALLOWED_EXTS",

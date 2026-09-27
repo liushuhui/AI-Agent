@@ -20,12 +20,17 @@ from flask import Blueprint, jsonify, request
 import db
 from lowcode_store import Forbidden, LowcodeError, Unauthorized
 
+# ---------------- 常量 ----------------
+# PBKDF2 迭代轮数：12 万轮是 OWASP 推荐量级，越高抗暴力破解越强、登录越慢
 PBKDF2_ROUNDS = 120_000
+# 令牌有效期：7 天；每次登录发新令牌，退出即删
 TOKEN_TTL_HOURS = 24 * 7
 
 # 首次初始化时写入的演示账号（用户名 -> 初始密码）；已存在密码的用户不会覆盖
 SEED_PASSWORDS = {"admin": "admin123", "alice": "alice123", "bob": "bob123"}
 
+# 服务端会话令牌表：token 即主键，登出/过期就删行，可即时吊销
+# （区别于无状态 JWT——JWT 签发后难主动作废，这里故意用可吊销的服务端令牌）
 _TOKEN_DDL = """
     CREATE TABLE IF NOT EXISTS lowcode_token (
         token      VARCHAR(64) NOT NULL,
@@ -41,6 +46,10 @@ _TOKEN_DDL = """
 # ---------------- 密码 ----------------
 
 def hash_password(password: str) -> str:
+    """口令加盐哈希，返回 'salt$digest' 字符串入库。
+
+    每次随机 16 字节盐：即使两个用户同密码，库里存的 hash 也不同。
+    """
     salt = secrets.token_hex(16)
     digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), bytes.fromhex(salt), PBKDF2_ROUNDS
@@ -49,9 +58,14 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
+    """校验口令是否匹配库里存的 'salt$digest'。
+
+    用 hmac.compare_digest 做常量时间比较，避免时序侧信道泄露 hash。
+    """
     try:
         salt, digest = stored.split("$", 1)
     except ValueError:
+        # 存的格式不对（老数据/手改坏）：直接判失败，不抛异常
         return False
     check = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), bytes.fromhex(salt), PBKDF2_ROUNDS
@@ -74,20 +88,26 @@ def init_auth_tables() -> None:
     """建令牌表 + 给老的 lowcode_user 补 password_hash 并回填演示密码（幂等）。"""
     with db.db_session() as cur:
         cur.execute(_TOKEN_DDL)
+        # 老库里 lowcode_user 没有 password_hash 列，这里平滑补上（带默认空串）
         _ensure_column(cur, "lowcode_user", "password_hash", "VARCHAR(255) NOT NULL DEFAULT ''")
         for username, password in SEED_PASSWORDS.items():
+            # 只给「还没设过密码」的种子用户回填，不覆盖用户自己改过的密码
             cur.execute(
                 "UPDATE lowcode_user SET password_hash = %s "
                 "WHERE id = %s AND (password_hash IS NULL OR password_hash = '')",
                 (hash_password(password), username),
             )
+        # 顺手清掉过期令牌，防止令牌表无限膨胀
         cur.execute("DELETE FROM lowcode_token WHERE expires_at <= NOW()")
 
 
 # ---------------- 令牌 ----------------
 
 def login(username: str, password: str) -> dict:
-    """校验账号密码并签发令牌；失败一律抛 401（不区分用户名/密码错）。"""
+    """校验账号密码并签发令牌；失败一律抛 401（不区分用户名/密码错）。
+
+    故意不告诉攻击者「用户不存在还是密码错」，统一报同一句话，防用户枚举。
+    """
     with db.db_session() as cur:
         cur.execute(
             "SELECT id, name, role, password_hash FROM lowcode_user WHERE id = %s",
@@ -96,6 +116,7 @@ def login(username: str, password: str) -> dict:
         row = cur.fetchone()
     if row is None or not verify_password(password, row.get("password_hash") or ""):
         raise Unauthorized("用户名或密码不正确")
+    # 32 字节 URL-safe 随机串做令牌：足够长，无法被猜
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now() + timedelta(hours=TOKEN_TTL_HOURS)
     with db.db_session() as cur:
@@ -111,6 +132,7 @@ def login(username: str, password: str) -> dict:
 
 
 def revoke_token(token: str) -> None:
+    """登出：把令牌从表里删掉（服务端会话即时失效）。"""
     if not token:
         return
     with db.db_session() as cur:
@@ -118,7 +140,10 @@ def revoke_token(token: str) -> None:
 
 
 def resolve_token(token: str) -> dict | None:
-    """令牌 -> 用户；无效/过期返回 None。"""
+    """令牌 -> 用户；无效/过期返回 None。
+
+    查库时顺便带 expires_at > NOW()，过期令牌直接查不到，天然失效。
+    """
     if not token:
         return None
     with db.db_session() as cur:
@@ -145,6 +170,7 @@ def _on_auth_error(exc: LowcodeError):
 
 
 def _bearer_token() -> str:
+    """从 Authorization 头里取 Bearer 令牌；格式不对返回空串。"""
     header = request.headers.get("Authorization", "")
     if header.lower().startswith("bearer "):
         return header[7:].strip()
@@ -166,6 +192,7 @@ def can_access(user: dict, owner_id: str) -> bool:
 
 @auth_bp.post("/auth/login")
 def api_login():
+    """登录：校验账号密码，成功返回令牌+用户信息。"""
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
@@ -176,12 +203,14 @@ def api_login():
 
 @auth_bp.post("/auth/logout")
 def api_logout():
+    """登出：吊销当前 Bearer 令牌。"""
     revoke_token(_bearer_token())
     return jsonify({"ok": True})
 
 
 @auth_bp.get("/auth/me")
 def api_me():
+    """返回当前登录用户信息（前端进页面时用来判断角色/渲染权限）。"""
     return jsonify({"user": require_user()})
 
 
@@ -191,6 +220,7 @@ def api_users():
     user = require_user()
     if user["role"] != "admin":
         raise Forbidden("只有管理员可以查看用户清单")
+    # 函数内延迟 import：避免与 lowcode_store 互相 import 造成循环
     import lowcode_store as store
 
     return jsonify({"users": store.list_users()})

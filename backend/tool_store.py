@@ -23,6 +23,7 @@ import db
 #   columns 列顺序，灌种子数据时按它拼 INSERT
 #   seed    首次灌入的数据（仅当表为空时写入）
 _TOOL_TABLES = (
+    # 天气：城市名(主键) -> 天气描述文本；供 find_weather 使用
     {
         "name": "tool_weather",
         "ddl": """
@@ -42,6 +43,7 @@ _TOOL_TABLES = (
             ("广州", "多云，21-29℃，空气质量良，湿度 72%"),
         ),
     },
+    # 汇率：货币代码(主键) -> 中文名 + 对人民币汇率；供 find_currencies / list_currency_codes 使用
     {
         "name": "tool_currency",
         "ddl": """
@@ -62,6 +64,7 @@ _TOOL_TABLES = (
             ("HKD", "港币", 1.09),
         ),
     },
+    # 产品检索：关键词(主键) -> 产品信息；供 find_product 使用
     {
         "name": "tool_product",
         "ddl": """
@@ -78,6 +81,7 @@ _TOOL_TABLES = (
             ("耳机", "AirPods Pro (¥1999), Sony WH-1000XM5 (¥2499)"),
         ),
     },
+    # 新闻：关键词(主键) -> 新闻摘要；search_info 与 search_news 共用（见下方 seed 注释）
     {
         "name": "tool_news",
         "ddl": """
@@ -98,6 +102,7 @@ _TOOL_TABLES = (
             ("特斯拉", "1. 特斯拉新工厂投产 2. 特斯拉下调部分车型售价"),
         ),
     },
+    # 股票行情：公司名(主键) -> 行情描述；供 find_stock 使用
     {
         "name": "tool_stock",
         "ddl": """

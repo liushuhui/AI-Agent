@@ -1,3 +1,48 @@
+"""message.py —— 对话 SSE 主链路（Flask HTTP 层）。
+
+在整体架构中的位置
+==================
+            浏览器 / EventSource
+                    │  （POST，text/event-stream 长连接）
+                    ▼
+   ┌─────────────────────────────────────────────┐
+   │ 本文件（message.py，Flask Blueprint）        │
+   │  · 解析请求体、校验 thread_id / 归属权限     │
+   │  · 把消息字典转成 LangChain 消息对象          │
+   │  · 驱动 agent 流式运行、把分片编码成 SSE 事件  │
+   │  · 空闲心跳、断线落库、审批续跑回写            │
+   └─────────────────────────────────────────────┘
+        │ agent.stream() / agent.resume()      │ db.append_message() 等
+        ▼                                      ▼
+   AIagent.assistant.SmartAssistant        db.py（MySQL 持久层）
+   （LangGraph 编译图 + 中间件栈 + 人工审批）   users/attachments/conversations/...
+
+上下游职责划分
+==============
+- 本文件只负责「怎么把模型的流式产出安全、完整地送到前端并落库」，不关心
+  模型/工具/审批的内部实现（那是 AIagent/ 包的事）；
+- 历史与状态分两处存放：给用户看的正文在 MySQL（db.py），给 LangGraph 恢复
+  挂起工具调用的运行状态在进程内 checkpointer（SmartAssistant 持有的
+  InMemorySaver），靠 thread_id 串起来。
+
+对外路由
+========
+  POST /send-message/stream                     无状态流式对话（调试用，历史不落库）
+  POST /send-message/resume                     无状态路径提交审批续跑
+  POST /conversations/<id>/messages            会话内发消息（历史在服务端，主路径）
+  POST /conversations/<id>/messages/resume      会话内审批续跑（校验 message_id 归属）
+
+SSE 事件协议（每条都是 `data: {...}\\n\\n`，文末发 `[DONE]` 收尾）
+==================================================================
+  reasoning  思维链分片（可忽略不渲染）
+  content    正文分片（逐 token 下发）
+  todos      待办清单（TodoListMiddleware 产出）
+  interrupt  工具调用挂起，等待人工审批（approve/edit/reject/respond）
+  usage      用量统计（整轮末尾一次）
+  error      生成中途出错（已发 200，只能以事件形式告知前端）
+  [DONE]     结束标记
+"""
+
 import contextvars
 import json
 import os
@@ -18,12 +63,18 @@ from logging_setup import current_request_id, get_logger
 from lowcode_auth import can_access, require_user
 from lowcode_store import LowcodeError
 
+# 本模块下面要 os.getenv 读 DEEPSEEK 配置，必须先加载 .env（与 db.py 同理：
+# load_dotenv 只对「它之后」的 getenv 生效，晚一步就读不到）。
 load_dotenv(override=True)
 
 log = get_logger("chat")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE")
+# 下面这段是早期「在本文件里直接 init_chat_model」的写法，现已废弃：
+# 模型统一由 AIagent/llm.py 按 config.AGENT_MODEL 构建，并在 SmartAssistant
+# 内部装配进 create_agent。保留这段注释仅作历史参考，不要在这里再初始化模型，
+# 否则会出现「本文件一份、SmartAssistant 里又一份」两个模型实例。
 # 使用langchain统一初始化模型
 # model = init_chat_model(
 #     # model="deepseek-flash",
@@ -34,6 +85,8 @@ DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE")
 # )
 
 
+# Flask 蓝图：本文件定义的路由都挂在它下面，由 app.py 用
+# app.register_blueprint(message_bp) 注册（未设 url_prefix，路由即根路径）。
 message_bp = Blueprint("message", __name__)
 
 
@@ -42,6 +95,10 @@ def _on_message_auth_error(exc: LowcodeError):
     """鉴权失败（未登录/令牌过期）统一 401 JSON，与低代码平台共用登录。"""
     return jsonify({"error": str(exc)}), exc.code
 
+# 模块级单例：import 本模块时就构建一次，整个进程共享同一个 agent 与其
+# InMemorySaver checkpointer。注意 checkpointer 是进程内存储——若将来用
+# gunicorn 多 worker 部署，「发起审批」和「提交审批」可能落到不同进程，
+# 那时必须换成 Redis/Postgres 版 checkpointer（详见 assistant.py 注释）。
 agent = SmartAssistant()
 
 # SSE 响应头：禁止缓存 + 关闭反向代理缓冲（否则流会被攒起来一次性下发）

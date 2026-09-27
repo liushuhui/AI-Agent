@@ -1,3 +1,15 @@
+"""结构化输出（强制 JSON）教学示例：让模型直接吐成 Pydantic 对象。
+
+演示「要确定性字段」时的标准配方：用 Pydantic 描述期望结构，
+再用 with_structured_output 让模型按结构返回，省去手写解析。
+主业务 assistant.py 走自然语言回复、不需要结构，这里只作参考实现。
+
+注意 DeepSeek 思考模式不能强制 function_calling，所以这里改用 json_mode，
+并在 prompt 里塞格式说明（详见下方注释）。
+
+前置：backend/.env 里配好 DEEPSEEK_API_KEY / DEEPSEEK_API_BASE，并能联网。
+"""
+
 import os
 
 from dotenv import load_dotenv

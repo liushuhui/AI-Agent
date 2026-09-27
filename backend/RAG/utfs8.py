@@ -1,3 +1,13 @@
+"""RAG 预处理（文档加载 + 文本切分）教学示例，未接入主业务。
+
+只演示 RAG 流水线的第一步：把磁盘上的文本读成 Document，再用
+CharacterTextSplitter 切成固定大小的 chunk。切完只打印块，
+**没有接向量库（Milvus）、也没有做 embedding/检索**——
+本仓库的 RAG 尚未落地为业务功能，这里仅是切块原理的对照实验。
+
+前置：backend/assets/test.txt 存在（脚本用 __file__ 反推路径，不依赖 cwd）。
+"""
+
 from pathlib import Path
 
 from langchain_community.document_loaders import TextLoader

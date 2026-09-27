@@ -38,6 +38,7 @@ TITLE_MAX = 60
 
 
 def _fail(message: str, status: int = 400):
+    """统一的失败响应：{"error": 文案} + 状态码，避免各端点各拼一套格式。"""
     return jsonify({"error": message}), status
 
 

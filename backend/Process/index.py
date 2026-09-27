@@ -1,3 +1,10 @@
+"""多进程教学示例（与 AI agent 主链路无关，独立演示 multiprocessing）。
+
+演示三件事：Process 启动子进程、daemon 守护进程随主进程退出、
+主进程边写 log.txt 边由守护进程统计行数。纯操作系统/并发练习，
+不是助手业务代码，跑它不需要任何模型或数据库。
+"""
+
 import os
 import time
 from multiprocessing import Lock, Process

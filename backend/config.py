@@ -26,6 +26,10 @@ load_dotenv(override=True)
 # ---------------- 读取助手 ----------------
 
 def _env(name: str, default: str | None = None) -> str | None:
+    """读字符串型环境变量：未设置返回 default；设为空串/纯空白也按 default 处理。
+
+    统一在这里 strip 一次，避免 " 5000 " 这类首尾空格把后续 int/flag 解析搞挂。
+    """
     value = os.getenv(name)
     if value is None:
         return default
@@ -42,6 +46,7 @@ def _flag(name: str, default: bool) -> bool:
 
 
 def _int(name: str, default: int) -> int:
+    """读整数型环境变量：解析失败（含非法字符串）静默回退到 default，不因此启动崩溃。"""
     raw = _env(name)
     if raw is None:
         return default
@@ -52,6 +57,7 @@ def _int(name: str, default: int) -> int:
 
 
 def _float(name: str, default: float) -> float:
+    """读浮点型环境变量：解析失败静默回退到 default（用于秒数、温度等小数参数）。"""
     raw = _env(name)
     if raw is None:
         return default
@@ -62,6 +68,7 @@ def _float(name: str, default: float) -> float:
 
 
 def _csv(name: str, default: list[str] | None = None) -> list[str]:
+    """读逗号分隔列表：按逗号切分、逐项 strip、丢弃空项；未设置时返回 default 的副本。"""
     raw = _env(name)
     if raw is None:
         return list(default or [])

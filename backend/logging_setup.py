@@ -35,6 +35,7 @@ def reset_request_id(token) -> None:
 
 
 def current_request_id() -> str:
+    """取当前上下文绑定的 request_id；请求外（启动/后台线程）调用返回默认占位 "-"。"""
     return _request_id.get()
 
 
@@ -60,6 +61,7 @@ _SENSITIVE_KEYS = {
 
 
 def _sanitize(extra: dict) -> dict:
+    """脱敏 extra 字段：命中 _SENSITIVE_KEYS 的键统一替换成 "***"，其余原样保留。"""
     cleaned = {}
     for key, value in extra.items():
         cleaned[key] = "***" if key.lower() in _SENSITIVE_KEYS else value
@@ -74,6 +76,10 @@ class _ExtraFilter(logging.Filter):
     ) | {"message", "asctime", "taskName"}
 
     def filter(self, record: logging.LogRecord) -> bool:
+        """把业务自定义字段剥离到 record.extras，并把当前 request_id 挂到 record 上。
+
+        恒返回 True（不丢弃任何日志）；格式化器据此区分「标准字段」与「业务字段」。
+        """
         record.extras = _sanitize(
             {k: v for k, v in record.__dict__.items() if k not in self._STANDARD}
         )
@@ -82,6 +88,8 @@ class _ExtraFilter(logging.Filter):
 
 
 class _TextFormatter(logging.Formatter):
+    """人读的单行文本格式：时间 级别 [request_id] logger: 消息 | k=v ...（带异常栈）。"""
+
     def format(self, record: logging.LogRecord) -> str:
         stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
         head = f"{stamp} {record.levelname:<7} [{record.request_id}] {record.name}: "
@@ -96,6 +104,8 @@ class _TextFormatter(logging.Formatter):
 
 
 class _JsonFormatter(logging.Formatter):
+    """机器读的一行一条 JSON 格式：时间戳用 UTC ISO8601，业务字段平铺进顶层。"""
+
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
@@ -151,4 +161,5 @@ def setup_logging() -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
+    """取命名 logger；所有模块统一走它，保证输出经过上面装好的 handler/filter。"""
     return logging.getLogger(name)

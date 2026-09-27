@@ -1,3 +1,20 @@
+"""手写「工具调用循环」的教学脚本（standalone demo，不被业务代码 import）。
+
+与正式代码的关系：
+  - 线上对话走 assistant.py 的 SmartAssistant —— 它用 LangChain 的 create_agent 把
+    「调模型 → 解析 tool_calls → 执行工具 → 把结果回喂 → 再调模型」这套循环自动跑起来，
+    外加中间件栈 / 检查点 / 人工审批。
+  - 本文件故意绕开 create_agent，把这套循环**手写一遍**，目的是让人看懂它背后到底在干嘛：
+    bind_tools 把工具 schema 告诉模型、模型决定调哪个工具、本地按名字查表执行、
+    结果包成 ToolMessage 追加回消息列表，如此往复直到模型不再请求工具。
+
+注意：
+  - 这是「脚本」不是「模块」：文件顶层就有可执行代码（messages=[]、while True…），
+    一旦被 import 就会把整套演示跑一遍，所以业务代码不会 import 它（业务侧用 manual_loop.py）。
+  - 运行方式（项目根目录下）：python -m AIagent.agent_tool
+  - 数据是写死的 mock，仅演示调用流程，不连数据库。
+"""
+
 import os
 
 from dotenv import load_dotenv
@@ -10,6 +27,9 @@ load_dotenv(override=True)
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE")
+# init_chat_model 支持 "provider:model" 简写：下面 model="deepseek:deepseek-flash"
+# 等价于注释里那两行（provider="deepseek" + model="deepseek-flash"）。
+# deepseek provider 走 OpenAI 兼容协议，所以需要显式传 api_key / base_url。
 # 使用langchain统一初始化模型
 model = init_chat_model(
     # model="deepseek-flash",
@@ -89,6 +109,14 @@ model_with_tool = model.bind_tools(tools)
 human_message = HumanMessage(content="苹果公司今天的股价是多少？最近有什么新闻？")
 messages.append(human_message)
 
+# ============ 手写工具调用循环（ReAct 手动版）============
+# 每轮做四件事：
+#   1) 把目前累积的全部 messages 发给模型；
+#   2) 模型要么给出最终文字回答（tool_calls 为空 → break），要么返回一个/多个 tool_calls；
+#   3) 逐个按名字查表执行工具，把结果包成 ToolMessage 追加进 messages；
+#   4) 带着新消息回到第 1 步再问一次模型 —— 模型看到工具结果后可能继续调下一个工具，
+#      也可能据此组织出最终答案。
+# create_agent 就是把这个 while 自动跑起来，外加中间件/检查点/审批等能力。
 while True:
     response = model_with_tool.invoke(messages)
     messages.append(response)

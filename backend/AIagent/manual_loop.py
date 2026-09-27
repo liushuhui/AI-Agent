@@ -1,6 +1,12 @@
 """不依赖 create_agent 的手动工具循环示例（教学 / 调试用）。
 
 这里刻意不接人工审批：它就是「模型 → 工具 → 模型」最小闭环的样板。
+
+前置：需要 tool_store 的 tool_stock / tool_news 两张表（跑 AIagent.agents
+会调 init_tool_tables 建表并灌种子数据），并配好 DEEPSEEK_API_KEY。
+
+思路对照：lowcode_agent.py 的 generate_events 与本文件是同一套「手动循环 +
+工具注册表 + 未注册工具名兜底」写法，区别只在那里包成 SSE 接口、这里是脚本。
 """
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

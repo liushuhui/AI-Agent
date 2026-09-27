@@ -66,6 +66,7 @@ export function AiPanel({ schema, onApply }: AiPanelProps) {
       await agentStream(
         { instruction: text, schema, materials: buildMaterialCatalog() },
         (event) => {
+          console.log('evvv====', event);
           if (event.type === "text") {
             setWords((prev) => prev + event.content);
           } else if (event.type === "status") {

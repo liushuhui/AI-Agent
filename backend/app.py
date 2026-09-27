@@ -22,6 +22,13 @@ Flask 自带的 app.run() 只是开发服务器（单进程、无优雅退出）
 
 from flask import Flask, jsonify, request
 
+# 项目内依赖一览（按职责分组，不调整顺序）：
+#   config          环境变量与全部开关阈值集中配置
+#   db              MySQL 连接、建库建表与用户/会话/消息 CRUD
+#   http_middleware 统一装配的 HTTP 中间件（见该文件顶部模块 docstring）
+#   tool_store      Agent 业务工具所需数据表（天气/汇率/产品/新闻/股票）
+#   *_bp            各业务蓝图，下方统一 register_blueprint 挂到 app
+#   logging_setup   结构化日志 + 基于 contextvar 的 request_id 透传
 import config
 import db
 import http_middleware
@@ -53,6 +60,14 @@ db.init_db()  # 启动时确保库表已创建
 tool_store.init_tool_tables()  # 工具用的数据表 + 首次种子数据（幂等，同样启动时做一次）
 lowcode_store.init_lowcode_tables()  # 低代码平台表 + 种子用户/示例页面（幂等）
 lowcode_auth.init_auth_tables()  # 令牌表 + 给种子用户回填演示密码（幂等）
+# 注册全部业务蓝图（顺序不影响路由匹配，只影响错误页/文档聚合展示）：
+#   message_bp       会话内发消息 / 续跑人工审批（SSE 事件流）
+#   attachment_bp   附件上传、原文读取、删除
+#   workspace_bp     工作区目录选择 / 目录浏览 / 文件树 / 文本预览
+#   conversation_bp  会话的列表/新建/重命名/删除
+#   lowcode_bp       低代码平台页面与接口
+#   lowcode_agent_bp 低代码 Agent 编排
+#   auth_bp          登录令牌签发与校验
 app.register_blueprint(message_bp)
 app.register_blueprint(attachment_bp)
 app.register_blueprint(workspace_bp)
@@ -77,6 +92,11 @@ http_middleware.init_app(app, readiness_probe=_readiness_probe)
 # ---------------- 简易接口说明页 ----------------
 @app.route("/apidocs")
 def apidocs():
+    """自描述接口页：把全部路由、附件能力、限流与运行环境 dump 成 JSON。
+
+    不生成 Swagger 文档，只做一份「开机自检 + 路由清单」，方便 curl / 前端对照调试；
+    限流数字直接读 config，改了配置这里会自动反映，不会与实际行为脱节。
+    """
     return jsonify(
         {
             "接口列表": {
@@ -151,6 +171,11 @@ def apidocs():
 # ---------------- 增 ---------------- 
 @app.route("/users", methods=["POST"])
 def create_user():
+    """新增用户：JSON 体 {name, email}，二者均为必填。
+
+    成功返回 201 + 新用户记录；邮箱唯一约束冲突等 DB 异常统一转成 400 中文提示，
+    不把底层 SQL 错误直接抛给前端。
+    """
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
     email = (data.get("email") or "").strip()
@@ -166,12 +191,14 @@ def create_user():
 # ---------------- 查 ----------------
 @app.route("/users", methods=["GET"])
 def list_users():
+    """用户列表：?keyword= 可选，按姓名/邮箱模糊匹配；不传则返回全部。"""
     keyword = (request.args.get("keyword") or "").strip()
     return jsonify(db.list_users(keyword))
 
 
 @app.route("/users/<string:user_id>", methods=["GET"])
 def get_user(user_id):
+    """查单个用户；记录不存在时返回 404。"""
     user = db.get_user(user_id)
     if user is None:
         return jsonify({"error": f"用户 {user_id} 不存在"}), 404
@@ -181,6 +208,11 @@ def get_user(user_id):
 # ---------------- 改 ----------------
 @app.route("/users/<string:user_id>", methods=["PUT"])
 def update_user(user_id):
+    """部分更新用户：JSON 体可只传 name 或 email 之一，两者都不传则 400。
+
+    name/email 为空串时按 None 处理（即「不改该列」）；命中唯一约束等 DB 异常转 400，
+    目标记录不存在转 404。
+    """
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip() or None
     email = (data.get("email") or "").strip() or None
@@ -198,6 +230,7 @@ def update_user(user_id):
 # ---------------- 删 ----------------
 @app.route("/users/<string:user_id>", methods=["DELETE"])
 def delete_user(user_id):
+    """删除用户；记录不存在时返回 404。"""
     if not db.delete_user(user_id):
         return jsonify({"error": f"用户 {user_id} 不存在"}), 404
     return jsonify({"message": f"用户 {user_id} 已删除"})

@@ -18,6 +18,7 @@ workspace_bp = Blueprint("workspace", __name__)
 
 
 def _fail(exc: Exception, status: int = 400):
+    """统一的失败响应：把工作区异常的中文文案塞进 {"error": ...} + 状态码。"""
     return jsonify({"error": str(exc)}), status
 
 
